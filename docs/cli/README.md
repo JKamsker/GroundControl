@@ -80,6 +80,8 @@ groundcontrol snapshot publish --project-id <project-id>
 
 ## Command Reference
 
+The full generated command reference is available as [Markdown](reference.md) and as a [browser viewer](../cli-browser/index.html).
+
 | Domain | Commands | Description |
 |--------|----------|-------------|
 | [Authentication](authentication.md) | `auth`, `user`, `role`, `token` | Server credentials, user management, roles, and access tokens |

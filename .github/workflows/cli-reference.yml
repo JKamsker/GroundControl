@@ -1,0 +1,116 @@
+name: CLI Reference
+
+on:
+  push:
+    branches: [ main, inspectra-cli-docs ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore GroundControl.slnx
+
+      - name: Build
+        run: dotnet build GroundControl.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test GroundControl.slnx --configuration Release --no-build --no-restore -- --report-xunit-trx
+
+  generate:
+    runs-on: windows-latest
+    needs: [ build-and-test ]
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.203
+
+      - name: Restore CLI
+        run: dotnet restore src/GroundControl.Cli/GroundControl.Cli.csproj
+
+      - name: Build CLI
+        run: dotnet build src/GroundControl.Cli/GroundControl.Cli.csproj --configuration Release --framework net10.0 --no-restore
+
+      - name: Install InSpectra
+        shell: pwsh
+        run: |
+          dotnet tool update --global InSpectra.Gen --version 0.0.164
+          $toolPath = Join-Path $env:USERPROFILE ".dotnet\tools"
+          Add-Content -Path $env:GITHUB_PATH -Value $toolPath
+
+      - name: Generate CLI reference
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path .inspectra | Out-Null
+          inspectra generate dotnet src/GroundControl.Cli/GroundControl.Cli.csproj --configuration Release --framework net10.0 --opencli-mode help --command groundcontrol --out .inspectra/opencli.json --overwrite
+
+      - name: Normalize generated version
+        shell: pwsh
+        run: |
+          (Get-Content .inspectra/opencli.json -Raw) -replace 'Nutzung:', 'Usage:' | Set-Content .inspectra/opencli.json
+          $json = Get-Content .inspectra/opencli.json -Raw | ConvertFrom-Json
+          $json.info.version = 'generated from source'
+          $json.info.description = $json.info.description -replace "\r?\nUsage:\r?\n[^\r\n]+", ''
+
+          function Normalize-CommandReference($command) {
+            if ($command.description) {
+              $command.description = $command.description -replace "\r?\nUsage:\r?\n[^\r\n]+", ''
+            }
+
+            foreach ($argument in @($command.arguments)) {
+              if ($argument.name -eq 'ID') {
+                $argument.required = $true
+                $argument.arity.minimum = 1
+                $argument.arity.maximum = 1
+              }
+            }
+
+            foreach ($option in @($command.options)) {
+              if ($option.name -eq '--version') {
+                $option.description = 'Show version information'
+                $option.arguments = @()
+              }
+            }
+
+            foreach ($childCommand in @($command.commands)) {
+              Normalize-CommandReference $childCommand
+            }
+          }
+
+          Normalize-CommandReference $json
+          $json | ConvertTo-Json -Depth 100 | Set-Content .inspectra/opencli.json
+
+      - name: Render CLI reference
+        shell: pwsh
+        run: |
+          inspectra render file markdown .inspectra/opencli.json --layout single --out docs/cli/reference.md --title "groundcontrol CLI" --command-prefix groundcontrol --overwrite
+          inspectra render file html .inspectra/opencli.json --out-dir docs/cli-browser --title "groundcontrol CLI" --command-prefix groundcontrol --label "GroundControl.Cli" --single-file --compression-level 0 --overwrite
+
+      - name: Verify generated docs are current
+        run: git diff --exit-code -- docs/cli/reference.md

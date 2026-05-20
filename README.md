@@ -158,6 +158,7 @@ For a guided walkthrough, see the [Getting Started guide](docs/guide/getting-sta
 | [SDK Quick Start](docs/guide/sdk/quickstart.md) | Connecting with `GroundControl.Link` |
 | [SDK Connection Modes](docs/guide/sdk/connection-modes.md) | SSE streaming, polling, and combined mode |
 | [SDK Caching](docs/guide/sdk/caching.md) | File cache, null cache, and cache configuration |
+| [CLI Reference](docs/cli/reference.md) | Generated command-line reference for `groundcontrol` |
 | [SDK Options Reference](docs/guide/sdk/options-reference.md) | Full `GroundControlOptions` reference |
 | [API Overview](docs/guide/api/overview.md) | REST API overview and conventions |
 | [API Endpoints](docs/guide/api/endpoints.md) | Full endpoint reference |
